@@ -61,11 +61,11 @@ while True:
         cmd = [
             "ffmpeg",
             "-re",
-            "-stream_loop", "-1",   # loop video
+            "-stream_loop", "-1",
             "-i", video_file,
-            "-i", audio_file,       # audio tidak di-loop
-            "-map", "0:v:0",        # ambil video dari file pertama
-            "-map", "1:a:0",        # ambil audio dari file kedua
+            "-i", audio_file,
+            "-map", "0:v:0",
+            "-map", "1:a:0",
             "-c:v", "libx264",
             "-preset", "ultrafast",
             "-tune", "zerolatency",
@@ -73,11 +73,12 @@ while True:
             "-c:a", "aac",
             "-b:a", "128k",
             "-ar", "44100",
-            "-b:v", "2500k",
-            "-maxrate", "2500k",
-            "-bufsize", "5000k",
+            "-b:v", "1200k",
+            "-maxrate", "1200k",
+            "-bufsize", "2400k",
             "-g", "60",
-            "-t", str(seg_dur),     # stop setelah audio habis
+            "-t", str(seg_dur),
+            "-r", "24",
             "-f", "flv",
             RTMP_URL
         ]
