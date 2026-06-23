@@ -205,6 +205,7 @@ st.markdown("""
         </svg>
     </div>
     <h2 style="text-align: center; color: white; margin-top: -5px; margin-bottom: 30px; font-weight: 700; letter-spacing: -0.5px;">🚀 YouTube Live Streaming</h2>
+    <h3 style="text-align: center; color: white; margin-top: -10px; margin-bottom: 40px; font-weight: 500; font-size: 16px;">Dashboard v2.0 - Stream Control</h3>
 """, unsafe_allow_html=True)
 
 # --- 2. STREAM KEY INPUT ---
