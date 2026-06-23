@@ -4,17 +4,146 @@ import os
 import glob
 import subprocess
 import signal
+import base64
 from mutagen.mp3 import MP3
 from mutagen.id3 import ID3, APIC
 
-st.set_page_config(page_title="CPM Control Panel 24/7", layout="wide")
+# Set halaman ke mode centered agar ramping di desktop & pas di HP
+st.set_page_config(page_title="YouTube Live Control", layout="centered")
 
+# --- PATH CONFIGURATION ---
 VIDEO_DIR = "/home/amekuning2/web_panel/video"
 AUDIO_DIR = "/home/amekuning2/web_panel/audio"
 PID_FILE = "/home/amekuning2/web_panel/stream.pid"
+STREAM_KEY_FILE = "/home/amekuning2/web_panel/stream_key.txt"
 
 os.makedirs(VIDEO_DIR, exist_ok=True)
 os.makedirs(AUDIO_DIR, exist_ok=True)
+
+# Default Placeholder Image (Sleek lofi cozy room aesthetic)
+DEFAULT_COVER = "http://googleusercontent.com/image_collection/image_retrieval/17283921825149128651_0"
+
+# --- INJECT CUSTOM CSS FOR PREMIUM DARK THEME ---
+st.markdown(f"""
+    <style>
+    /* Mengubah background utama ke Ultra-Dark */
+    .stApp {{
+        background-color: #0f0f0f !important;
+        color: #f1f1f1 !important;
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }}
+    
+    /* Menyembunyikan element Streamlit default */
+    [data-testid="stSidebar"] {{
+        display: none !important;
+    }}
+    header {{
+        visibility: hidden !important;
+        height: 0px !important;
+    }}
+    footer {{
+        visibility: hidden !important;
+    }}
+    
+    /* Global Card/Container Dark styling */
+    .custom-card {{
+        background-color: #161616;
+        border: 1px solid #282828;
+        border-radius: 12px;
+        padding: 22px;
+        margin-bottom: 20px;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
+    }}
+    
+    /* Item row styling */
+    .item-row {{
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 12px 0;
+        border-bottom: 1px solid #222222;
+    }}
+    .item-row:last-child {{
+        border-bottom: none;
+    }}
+    
+    .item-left {{
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        min-width: 0;
+        flex-grow: 1;
+    }}
+    
+    .item-thumb {{
+        width: 54px;
+        height: 54px;
+        border-radius: 8px;
+        object-fit: cover;
+        background-color: #242424;
+        flex-shrink: 0;
+        border: 1px solid #333333;
+    }}
+    
+    .item-info {{
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+    }}
+    
+    .item-title {{
+        font-weight: 600;
+        font-size: 14.5px;
+        color: #ffffff;
+        margin: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }}
+    
+    .item-subtitle {{
+        font-size: 12px;
+        color: #888888;
+        margin: 2px 0 0 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }}
+    
+    .item-duration {{
+        font-size: 13px;
+        color: #aaaaaa;
+        font-family: monospace;
+        margin-right: 15px;
+        flex-shrink: 0;
+    }}
+    
+    /* Customization form inputs */
+    div[data-baseweb="input"] {{
+        background-color: #1f1f1f !important;
+        border: 1px solid #333333 !important;
+        border-radius: 8px !important;
+    }}
+    input {{
+        color: #ffffff !important;
+        font-size: 15px !important;
+    }}
+    
+    /* Label styling */
+    label {{
+        color: #aaaaaa !important;
+        font-size: 13px !important;
+        font-weight: 500 !important;
+        margin-bottom: 6px !important;
+    }}
+    
+    /* Custom play/stop buttons container */
+    .control-container {{
+        margin-top: 25px;
+        text-align: center;
+    }}
+    </style>
+""", unsafe_allow_html=True)
 
 # --- HELPER FUNCTIONS ---
 def get_stream_status():
@@ -22,7 +151,6 @@ def get_stream_status():
         with open(PID_FILE, "r") as f:
             pid = f.read().strip()
         if pid:
-            # Cek apakah PID benar-benar berjalan
             try:
                 os.kill(int(pid), 0)
                 return True, int(pid)
@@ -33,138 +161,248 @@ def get_stream_status():
 def get_audio_duration(file_path):
     try:
         audio = MP3(file_path)
-        return audio.info.length # dalam detik
+        return audio.info.length  # dalam detik
     except:
         return 0
 
-def get_audio_thumbnail(file_path):
+def get_audio_thumbnail_b64(file_path):
     try:
         audio = ID3(file_path)
         for tag in audio.values():
             if isinstance(tag, APIC):
-                return tag.data # Return bytes gambar
+                # Convert cover art bytes to base64 string
+                b64_data = base64.b64encode(tag.data).decode("utf-8")
+                return f"data:{tag.mime};base64,{b64_data}"
     except:
         pass
-    return None
+    return DEFAULT_COVER
 
-# --- UI HEADER ---
-st.title("🎙️ CPM - Cerita Podcast Misteri 24/7 Engine")
-st.subheader("Control Panel v2.0 (1 Video Loop + Sequential Audio)")
-st.write("---")
+# Save stream key persistently
+def save_stream_key(key):
+    with open(STREAM_KEY_FILE, "w") as f:
+        f.write(key)
 
-# Cek Status Running
+def load_stream_key():
+    if os.path.exists(STREAM_KEY_FILE):
+        with open(STREAM_KEY_FILE, "r") as f:
+            return f.read().strip()
+    return ""
+
+# Initialize session states for add toggles
+if "show_add_video" not in st.session_state:
+    st.session_state.show_add_video = False
+if "show_add_music" not in st.session_state:
+    st.session_state.show_add_music = False
+
 is_running, run_pid = get_stream_status()
 
-# --- SIDEBAR: KONTROL STREAM ---
-st.sidebar.header("🎛️ Live Stream Controller")
-stream_key = st.sidebar.text_input("YouTube Stream Key", type="password", value="xxxx-xxxx-xxxx-xxxx")
-loop_count = st.sidebar.number_input("Jumlah Loop Audio", min_value=1, value=5, step=1)
+# --- 1. YOUTUBE HEADER BANNER ---
+st.markdown("""
+    <div style="background-color: #FF0000; display: flex; justify-content: center; align-items: center; height: 110px; border-radius: 6px; margin-bottom: 20px;">
+        <svg viewBox="0 0 200 60" width="200" height="60">
+            <path fill="#FFFFFF" d="M37.3,10.3c-4.4-0.3-15.6-0.3-20.1,0C12.4,10.6,8.7,11.3,6.2,13.8c-3,3-3.2,8.8-3.2,16.2s0.2,13.2,3.2,16.2 c2.5,2.5,6.2,3.2,11.1,3.5c4.5,0.3,15.7,0.3,20.1,0c4.9-0.3,8.6-1.1,11.1-3.5c3-3,3.2-8.8,3.2-16.2s-0.2-13.2-3.2-16.2 C51.8,11.3,48.1,10.6,47.3,10.3z M22,41.5V18.5l15,11.5L22,41.5z"/>
+            <text x="62" y="41" fill="#FFFFFF" font-family="'Arial Black', Gadget, sans-serif" font-size="28" font-weight="900" letter-spacing="-1">YouTube</text>
+        </svg>
+    </div>
+    <h2 style="text-align: center; color: white; margin-top: -5px; margin-bottom: 30px; font-weight: 700; letter-spacing: -0.5px;">🚀 YouTube Live Streaming</h2>
+""", unsafe_allow_html=True)
 
+# --- 2. STREAM KEY INPUT ---
+saved_key = load_stream_key()
+stream_key = st.text_input("Youtube Stream Key", type="password", value=saved_key or "xxxx")
+if stream_key != saved_key:
+    save_stream_key(stream_key)
+
+st.write("")
+
+# --- 3. VIDEO LIST CARD ---
+st.markdown('<div class="custom-card">', unsafe_allow_html=True)
+col_v_title, col_v_btn = st.columns([5, 1])
+with col_v_title:
+    st.markdown("<h3 style='margin:0; font-size:18px; font-weight:600; color:white;'>Video List</h3>", unsafe_allow_html=True)
+with col_v_btn:
+    if st.button("➕ Add", key="add_v_trigger", use_container_width=True):
+        st.session_state.show_add_video = not st.session_state.show_add_video
+
+# Inline Video Upload form
+if st.session_state.show_add_video:
+    st.markdown("<div style='margin-top:15px; padding:15px; background:#1f1f1f; border-radius:8px;'>", unsafe_allow_html=True)
+    uploaded_video = st.file_uploader("Upload video background baru (.mp4)", type=["mp4"])
+    if uploaded_video is not None:
+        # Hapus video lama terlebih dahulu untuk menjamin "Max 1 video"
+        old_videos = glob.glob(os.path.join(VIDEO_DIR, "*.mp4"))
+        for ov in old_videos:
+            try:
+                os.remove(ov)
+            except:
+                pass
+        
+        # Save video baru
+        with open(os.path.join(VIDEO_DIR, uploaded_video.name), "wb") as f:
+            f.write(uploaded_video.getbuffer())
+        st.success("Video berhasil di-upload sebagai background utama!")
+        st.session_state.show_add_video = False
+        st.rerun()
+    st.markdown("</div>", unsafe_allow_html=True)
+
+# List Video files (Max 1 video)
+video_files = glob.glob(os.path.join(VIDEO_DIR, "*.mp4"))
+if video_files:
+    v_path = video_files[0]
+    v_filename = os.path.basename(v_path)
+    # Simple formatting title from filename
+    v_display_title = os.path.splitext(v_filename)[0].replace("-", " ").replace("_", " ").title()
+    
+    st.markdown(f"""
+        <div class="item-row" style="margin-top: 15px;">
+            <div class="item-left">
+                <img class="item-thumb" src="{DEFAULT_COVER}" alt="Video thumb">
+                <div class="item-info">
+                    <div class="item-title">{v_display_title}</div>
+                    <div class="item-subtitle">{v_filename}</div>
+                </div>
+            </div>
+        </div>
+    """, unsafe_allow_html=True)
+    
+    # Simple controls container for video inside card
+    col_v_dummy, col_v_actions = st.columns([5, 1])
+    with col_v_actions:
+        with st.popover("⋮ Actions"):
+            if st.button("🗑️ Delete Video", key="del_video_btn"):
+                os.remove(v_path)
+                st.rerun()
+else:
+    st.markdown("<div style='color:#666666; font-size:14px; margin-top:15px; font-style:italic;'>Tidak ada video aktif. Silakan tambahkan satu video background (.mp4).</div>", unsafe_allow_html=True)
+
+st.markdown('</div>', unsafe_allow_html=True)
+
+# --- 4. MUSIC LIST CARD ---
+st.markdown('<div class="custom-card">', unsafe_allow_html=True)
+col_m_title, col_m_btn = st.columns([5, 1])
+with col_m_title:
+    st.markdown("<h3 style='margin:0; font-size:18px; font-weight:600; color:white;'>Music list</h3>", unsafe_allow_html=True)
+with col_m_btn:
+    if st.button("➕ Add", key="add_m_trigger", use_container_width=True):
+        st.session_state.show_add_music = not st.session_state.show_add_music
+
+# Inline Music Upload form
+if st.session_state.show_add_music:
+    st.markdown("<div style='margin-top:15px; padding:15px; background:#1f1f1f; border-radius:8px;'>", unsafe_allow_html=True)
+    uploaded_audio = st.file_uploader("Upload audio track baru (.mp3)", type=["mp3"])
+    if uploaded_audio is not None:
+        with open(os.path.join(AUDIO_DIR, uploaded_audio.name), "wb") as f:
+            f.write(uploaded_audio.getbuffer())
+        st.success(f"Berhasil menambahkan track: {uploaded_audio.name}")
+        st.session_state.show_add_music = False
+        st.rerun()
+    st.markdown("</div>", unsafe_allow_html=True)
+
+# List Music files sorted alphabetically
+audio_files = sorted(glob.glob(os.path.join(AUDIO_DIR, "*.mp3")))
+total_duration_sec = 0
+
+if audio_files:
+    st.markdown("<div style='margin-top:10px;'>", unsafe_allow_html=True)
+    for idx, audio_path in enumerate(audio_files):
+        filename = os.path.basename(audio_path)
+        duration = get_audio_duration(audio_path)
+        total_duration_sec += duration
+        
+        minutes, seconds = divmod(int(duration), 60)
+        formatted_duration = f"{minutes:02d}:{seconds:02d}"
+        
+        # Get Album art base64 / default cover URL
+        cover_src = get_audio_thumbnail_b64(audio_path)
+        
+        # Human friendly title
+        clean_title = os.path.splitext(filename)[0]
+        # Remove common numeric sorting prefixes from view
+        if "_" in clean_title and clean_title.split("_")[0].isdigit():
+            clean_title = clean_title.split("_", 1)[1]
+        clean_title = clean_title.replace("-", " ").replace("_", " ").title()
+
+        # HTML Row layout
+        st.markdown(f"""
+            <div class="item-row">
+                <div class="item-left">
+                    <img class="item-thumb" src="{cover_src}" alt="Audio Cover">
+                    <div class="item-info">
+                        <div class="item-title">{clean_title}</div>
+                        <div class="item-subtitle">{filename}</div>
+                    </div>
+                </div>
+                <div class="item-duration">{formatted_duration}</div>
+            </div>
+        """, unsafe_allow_html=True)
+        
+        # Actions columns underneath the row
+        col_act_dummy, col_act_pop = st.columns([5, 1])
+        with col_act_pop:
+            with st.popover("⋮ Actions", key=f"pop_{idx}"):
+                new_name = st.text_input("Rename File", value=filename, key=f"ren_input_{idx}")
+                if new_name != filename:
+                    os.rename(audio_path, os.path.join(AUDIO_DIR, new_name))
+                    st.rerun()
+                if st.button("🗑️ Delete", key=f"del_btn_{idx}", use_container_width=True):
+                    os.remove(audio_path)
+                    st.rerun()
+                    
+    st.markdown("</div>", unsafe_allow_html=True)
+else:
+    st.markdown("<div style='color:#666666; font-size:14px; margin-top:15px; font-style:italic;'>Playlist kosong. Silakan upload file MP3.</div>", unsafe_allow_html=True)
+
+st.markdown('</div>', unsafe_allow_html=True)
+
+# --- 5. NUMBER LOOP INPUT ---
+loop_count = st.number_input("Number Loop", min_value=1, value=5, step=1)
+
+# Estimate total broadcast runtime
+total_min = total_duration_sec / 60
+grand_total_min = total_min * loop_count
+hours, mins = divmod(int(grand_total_min), 60)
+
+# Display calculations as sleek mini status indicators
+if total_duration_sec > 0:
+    st.markdown(f"""
+        <div style="background-color:#161616; padding:15px; border-radius:10px; border: 1px solid #222222; margin-top:15px; font-size:13.5px; color:#aaaaaa;">
+            📊 <b>Estimasi Live Selesai (Auto-Stop):</b> 
+            {int(total_min)} menit/playlist × {loop_count} Loop = <b>{hours} Jam {mins} Menit</b>
+        </div>
+    """, unsafe_allow_html=True)
+
+st.write("")
+
+# --- 6. PLAY / STOP LIVE BUTTON ---
 if is_running:
-    st.sidebar.success(f"🟢 Status: LIVE (PID: {run_pid})")
-    if st.sidebar.button("🔴 STOP STREAM", use_container_width=True):
+    st.markdown(f"""
+        <div style="text-align: center; color: #2ecc71; font-weight: 600; font-size: 14px; margin-bottom: 12px;">
+            🟢 LIVE STREAM SEDANG BERJALAN (PID: {run_pid})
+        </div>
+    """, unsafe_allow_html=True)
+    
+    if st.button("🟥 Stop Live", key="stop_live_btn", use_container_width=True):
         os.kill(run_pid, signal.SIGTERM)
         if os.path.exists(PID_FILE):
             os.remove(PID_FILE)
         st.rerun()
 else:
-    st.sidebar.error("🔴 Status: OFFLINE")
-    if st.sidebar.button("🚀 START STREAM", use_container_width=True):
-        if not stream_key:
-            st.sidebar.warning("Isi Stream Key dulu!")
+    st.markdown(f"""
+        <div style="text-align: center; color: #e74c3c; font-weight: 600; font-size: 14px; margin-bottom: 12px;">
+            🔴 STATUS: OFFLINE
+        </div>
+    """, unsafe_allow_html=True)
+    
+    if st.button("▶️ Play Live", key="play_live_btn", use_container_width=True):
+        if not stream_key or stream_key == "paste-your-youtube-stream-key-here":
+            st.error("Silakan masukkan Youtube Stream Key yang valid!")
+        elif not video_files:
+            st.error("Gagal memulai! Silakan upload file video background terlebih dahulu.")
+        elif not audio_files:
+            st.error("Gagal memulai! Silakan upload minimal 1 lagu di Playlist.")
         else:
-            # Jalankan core_stream.py di background menggunakan nohup / popen
+            # Trigger engine core_stream.py di background
             p = subprocess.Popen(["python3", "/home/amekuning2/web_panel/core_stream.py", stream_key, str(loop_count)])
             with open(PID_FILE, "w") as f:
                 f.write(str(p.pid))
             st.rerun()
-
-# --- MAIN CONTENT: ASSET MANAGEMENT ---
-tab1, tab2 = st.tabs(["🎥 Video Background (Max 1)", "🎵 Audio Playlist"])
-
-# --- TAB 1: VIDEO ---
-with tab1:
-    st.header("Video Background")
-    video_files = glob.glob(os.path.join(VIDEO_DIR, "*.mp4"))
-    
-    if video_files:
-        st.info(f"Video aktif saat ini: `{os.path.basename(video_files[0])}`")
-        if st.button("🗑️ Hapus Video Lama untuk Ganti baru"):
-            os.remove(video_files[0])
-            st.rerun()
-    else:
-        uploaded_video = st.file_uploader("Upload Video Background (720p .mp4)", type=["mp4"])
-        if uploaded_video is not None:
-            with open(os.path.join(VIDEO_DIR, uploaded_video.name), "wb") as f:
-                f.write(uploaded_video.getbuffer())
-            st.success("Video berhasil diupload!")
-            st.rerun()
-
-# --- TAB 2: AUDIO ---
-with tab2:
-    st.header("Audio Playlist & Estimasi")
-    
-    # Upload Item Baru
-    uploaded_audio = st.file_uploader("➕ Add Item (Upload MP3 Baru)", type=["mp3"])
-    if uploaded_audio is not None:
-        with open(os.path.join(AUDIO_DIR, uploaded_audio.name), "wb") as f:
-            f.write(uploaded_audio.getbuffer())
-        st.success(f"Berhasil menambah file: {uploaded_audio.name}")
-        st.rerun()
-        
-    st.write("---")
-    
-    # List & Urutan Audio
-    audio_files = sorted(glob.glob(os.path.join(AUDIO_DIR, "*.mp3")))
-    
-    if not audio_files:
-        st.warning("Belum ada file audio di folder `audio/`")
-    else:
-        total_duration_sec = 0
-        st.write("💡 *Tips: Ubah nama file (Rename) dengan awalan angka (misal: 01_lagu.mp3) untuk mengatur urutan putar.*")
-        
-        # Tampilkan List Audio dalam bentuk Grid/Table rapi
-        for idx, audio_path in enumerate(audio_files):
-            filename = os.path.basename(audio_path)
-            duration = get_audio_duration(audio_path)
-            total_duration_sec += duration
-            
-            minutes, seconds = divmod(int(duration), 60)
-            img_data = get_audio_thumbnail(audio_path)
-            
-            col1, col2, col3, col4 = st.columns([1, 4, 2, 2])
-            
-            with col1:
-                if img_data:
-                    st.image(img_data, width=60)
-                else:
-                    st.image("https://placehold.co/60x60?text=MP3", width=60) # Placeholder jika ga ada metadata gambar
-                    
-            with col2:
-                st.write(f"**{idx+1}. {filename}**")
-                
-            with col3:
-                st.write(f"⏱️ {minutes:02d}:{seconds:02d}")
-                
-            with col4:
-                # Fitur Rename & Delete
-                new_name = st.text_input("Rename", value=filename, key=f"ren_{idx}", label_visibility="collapsed")
-                if new_name != filename:
-                    os.rename(audio_path, os.path.join(AUDIO_DIR, new_name))
-                    st.rerun()
-                    
-                if st.button("🗑️ Delete", key=f"del_{idx}"):
-                    os.remove(audio_path)
-                    st.rerun()
-            st.write("---")
-            
-        # --- KALKULASI LOOP & ESTIMASI AUTO STOP ---
-        total_min = total_duration_sec / 60
-        grand_total_min = total_min * loop_count
-        hours, mins = divmod(int(grand_total_min), 60)
-        
-        st.subheader("📊 Estimasi Durasi Live Stream")
-        c1, c2, c3 = st.columns(3)
-        c1.metric("Durasi 1 Sesi Playlist", f"{int(total_min)} Menit")
-        c2.metric("Setting Target Loop", f"{loop_count}x Loop")
-        c3.metric("Total Durasi Live (Auto-Stop)", f"{hours} Jam {mins} Menit")
