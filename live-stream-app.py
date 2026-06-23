@@ -20,8 +20,11 @@ STREAM_KEY_FILE = "/home/amekuning2/web_panel/stream_key.txt"
 os.makedirs(VIDEO_DIR, exist_ok=True)
 os.makedirs(AUDIO_DIR, exist_ok=True)
 
-# Default Placeholder Image (Sleek lofi cozy room aesthetic)
-DEFAULT_COVER = "http://googleusercontent.com/image_collection/image_retrieval/17283921825149128651_0"
+# --- MODERN BASE64 SVG THUMBNAIL PLACEHOLDERS (Anti-Broken Link) ---
+# Play icon aesthetic placeholder for video
+DEFAULT_COVER = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIj48cmVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgcng9IjEyIiBmaWxsPSIjMjIyIi8+PHBvbHlnb24gcG9pbnRzPSI0MCwzNSA3MCw1MCA0MCw2NSIgZmlsbD0iI0ZGMDAwMCIvPjwvc3ZnPg=="
+# Music note aesthetic placeholder for audio tracks without album art
+DEFAULT_MUSIC_COVER = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIj48cmVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgcng9IjEyIiBmaWxsPSIjMjIyIi8+PHBhdGggZD0iTTM1LDc1IEE4LDggMCAxLDEgMzUsNjAgTDY1LDMwIEw2NSw0NSBMMzUsNzUgWiBNNjUsMzAgTDY1LDE1IEw4NSwyNSBMODUsNDAgWiIgZmlsbD0iIzg4OCIvPjwvc3ZnPg=="
 
 # --- INJECT CUSTOM CSS FOR PREMIUM DARK THEME ---
 st.markdown(f"""
@@ -175,7 +178,7 @@ def get_audio_thumbnail_b64(file_path):
                 return f"data:{tag.mime};base64,{b64_data}"
     except:
         pass
-    return DEFAULT_COVER
+    return DEFAULT_MUSIC_COVER
 
 # Save stream key persistently
 def save_stream_key(key):
@@ -204,8 +207,8 @@ st.markdown("""
             <text x="62" y="41" fill="#FFFFFF" font-family="'Arial Black', Gadget, sans-serif" font-size="28" font-weight="900" letter-spacing="-1">YouTube</text>
         </svg>
     </div>
-    <h2 style="text-align: center; color: white; margin-top: -5px; margin-bottom: 30px; font-weight: 700; letter-spacing: -0.5px;">🚀 YouTube Live Streaming</h2>
-    <h3 style="text-align: center; color: white; margin-top: -10px; margin-bottom: 40px; font-weight: 500; font-size: 16px;">Dashboard v2.0 - Stream Control</h3>
+    <h2 style="text-align: center; color: white; margin-top: -5px; margin-bottom: 5px; font-weight: 700; letter-spacing: -0.5px;">🚀 YouTube Live Streaming</h2>
+    <h3 style="text-align: center; color: white; margin-top: -4px; margin-bottom: 20px; font-weight: 500; font-size: 16px;">Dashboard v2.0 - Stream Control</h3>
 """, unsafe_allow_html=True)
 
 # --- 2. STREAM KEY INPUT ---
