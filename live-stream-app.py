@@ -191,9 +191,7 @@ def load_stream_key():
             return f.read().strip()
     return ""
 
-# Initialize session states for add toggles
-if "show_add_video" not in st.session_state:
-    st.session_state.show_add_video = False
+# Initialize session state for music add toggle
 if "show_add_music" not in st.session_state:
     st.session_state.show_add_music = False
 
@@ -208,7 +206,7 @@ st.markdown("""
         </svg>
     </div>
     <h2 style="text-align: center; color: white; margin-top: -5px; margin-bottom: 5px; font-weight: 700; letter-spacing: -0.5px;">🚀 YouTube Live Streaming</h2>
-    <h3 style="text-align: center; color: white; margin-top: -4px; margin-bottom: 20px; font-weight: 500; font-size: 16px;">Dashboard v2.0 - Stream Control</h3>
+    <h3 style="text-align: center; color: white; margin-top: -4px; margin-bottom: 20px; font-weight: 500; font-size: 16px;">Dashboard v2.5 - Stream Control</h3>
 """, unsafe_allow_html=True)
 
 # --- 2. STREAM KEY INPUT ---
@@ -219,35 +217,9 @@ if stream_key != saved_key:
 
 st.write("")
 
-# --- 3. VIDEO LIST CARD ---
+# --- 3. VIDEO LIST CARD (READ-ONLY) ---
 st.markdown('<div class="custom-card">', unsafe_allow_html=True)
-col_v_title, col_v_btn = st.columns([5, 1])
-with col_v_title:
-    st.markdown("<h3 style='margin:0; font-size:18px; font-weight:600; color:white;'>Video List</h3>", unsafe_allow_html=True)
-with col_v_btn:
-    if st.button("➕ Add", key="add_v_trigger", use_container_width=True):
-        st.session_state.show_add_video = not st.session_state.show_add_video
-
-# Inline Video Upload form
-if st.session_state.show_add_video:
-    st.markdown("<div style='margin-top:15px; padding:15px; background:#1f1f1f; border-radius:8px;'>", unsafe_allow_html=True)
-    uploaded_video = st.file_uploader("Upload video background baru (.mp4)", type=["mp4"])
-    if uploaded_video is not None:
-        # Hapus video lama terlebih dahulu untuk menjamin "Max 1 video"
-        old_videos = glob.glob(os.path.join(VIDEO_DIR, "*.mp4"))
-        for ov in old_videos:
-            try:
-                os.remove(ov)
-            except:
-                pass
-        
-        # Save video baru
-        with open(os.path.join(VIDEO_DIR, uploaded_video.name), "wb") as f:
-            f.write(uploaded_video.getbuffer())
-        st.success("Video berhasil di-upload sebagai background utama!")
-        st.session_state.show_add_video = False
-        st.rerun()
-    st.markdown("</div>", unsafe_allow_html=True)
+st.markdown("<h3 style='margin:0; font-size:18px; font-weight:600; color:white;'>Video List</h3>", unsafe_allow_html=True)
 
 # List Video files (Max 1 video)
 video_files = glob.glob(os.path.join(VIDEO_DIR, "*.mp4"))
@@ -268,16 +240,8 @@ if video_files:
             </div>
         </div>
     """, unsafe_allow_html=True)
-    
-    # Simple controls container for video inside card
-    col_v_dummy, col_v_actions = st.columns([5, 1])
-    with col_v_actions:
-        with st.popover("⋮ Actions"):
-            if st.button("🗑️ Delete Video", key="del_video_btn"):
-                os.remove(v_path)
-                st.rerun()
 else:
-    st.markdown("<div style='color:#666666; font-size:14px; margin-top:15px; font-style:italic;'>Tidak ada video aktif. Silakan tambahkan satu video background (.mp4).</div>", unsafe_allow_html=True)
+    st.markdown("<div style='color:#666666; font-size:14px; margin-top:15px; font-style:italic;'>Tidak ada video aktif di folder. Silakan upload file video (.mp4) via WinSCP atau AndFTP Anda.</div>", unsafe_allow_html=True)
 
 st.markdown('</div>', unsafe_allow_html=True)
 
