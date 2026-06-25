@@ -1,7 +1,5 @@
-# /home/amekuning2/web_panel/live-stream-app.py
 import streamlit as st
 import os
-import glob
 import subprocess
 import signal
 import base64
@@ -217,12 +215,12 @@ if stream_key != saved_key:
 
 st.write("")
 
-# --- 3. VIDEO LIST CARD (READ-ONLY) ---
+# --- 3. VIDEO LIST CARD (READ-ONLY & CASE-INSENSITIVE) ---
 st.markdown('<div class="custom-card">', unsafe_allow_html=True)
 st.markdown("<h3 style='margin:0; font-size:18px; font-weight:600; color:white;'>Video List</h3>", unsafe_allow_html=True)
 
-# List Video files (Max 1 video)
-video_files = glob.glob(os.path.join(VIDEO_DIR, "*.mp4"))
+# List Video files (Case-insensitive match)
+video_files = [os.path.join(VIDEO_DIR, f) for f in os.listdir(VIDEO_DIR) if f.lower().endswith('.mp4')]
 if video_files:
     v_path = video_files[0]
     v_filename = os.path.basename(v_path)
@@ -245,7 +243,7 @@ else:
 
 st.markdown('</div>', unsafe_allow_html=True)
 
-# --- 4. MUSIC LIST CARD ---
+# --- 4. MUSIC LIST CARD (CASE-INSENSITIVE) ---
 st.markdown('<div class="custom-card">', unsafe_allow_html=True)
 col_m_title, col_m_btn = st.columns([5, 1])
 with col_m_title:
@@ -266,8 +264,8 @@ if st.session_state.show_add_music:
         st.rerun()
     st.markdown("</div>", unsafe_allow_html=True)
 
-# List Music files sorted alphabetically
-audio_files = sorted(glob.glob(os.path.join(AUDIO_DIR, "*.mp3")))
+# List Music files sorted alphabetically (Case-insensitive match)
+audio_files = sorted([os.path.join(AUDIO_DIR, f) for f in os.listdir(AUDIO_DIR) if f.lower().endswith('.mp3')])
 total_duration_sec = 0
 
 if audio_files:
@@ -374,3 +372,100 @@ else:
             with open(PID_FILE, "w") as f:
                 f.write(str(p.pid))
             st.rerun()
+```
+eof
+
+```python:Stream Core Engine:core_stream.py
+import os
+import sys
+import subprocess
+import time
+
+def get_stream_files():
+    video_dir = "/home/amekuning2/web_panel/video"
+    audio_dir = "/home/amekuning2/web_panel/audio"
+    
+    # Case-insensitive file lists (using lower match logic)
+    video_files = [os.path.join(video_dir, f) for f in os.listdir(video_dir) if f.lower().endswith('.mp4')]
+    audio_files = sorted([os.path.join(audio_dir, f) for f in os.listdir(audio_dir) if f.lower().endswith('.mp3')]) # Urut alfabetis
+    
+    return video_files[0] if video_files else None, audio_files
+
+def main():
+    if len(sys.argv) < 3:
+        print("Usage: python3 core_stream.py <STREAM_KEY> <TOTAL_LOOPS>")
+        sys.exit(1)
+        
+    STREAM_KEY = sys.argv[1]
+    TOTAL_LOOPS = int(sys.argv[2])
+    RTMP_URL = f"rtmp://a.rtmp.youtube.com/live2/{STREAM_KEY}"
+    
+    video_file, audio_files = get_stream_files()
+    
+    if not video_file or not audio_files:
+        print("Error: Video atau Audio tidak ditemukan!")
+        sys.exit(1)
+        
+    print(f"Menggunakan Video: {video_file}")
+    print(f"Total Audio terdeteksi: {len(audio_files)} file. Target Loop: {TOTAL_LOOPS}x")
+    
+    # Membuat txt file untuk concat audio berdasarkan jumlah loop
+    playlist_path = "/home/amekuning2/web_panel/audio_playlist.txt"
+    with open(playlist_path, "w") as f:
+        for _ in range(TOTAL_LOOPS):
+            for audio in audio_files:
+                # FFmpeg concat butuh path yang di-escape jika ada spasi
+                f.write(f"file '{audio}'\n")
+                
+    # Command FFmpeg: 
+    # -stream_loop -1 untuk melooping video tanpa batas
+    # -f concat untuk memutar list audio sesuai jumlah loop sampai habis (Auto-Stop)
+    ffmpeg_cmd = [
+        'ffmpeg',
+        '-re',
+        '-stream_loop', '-1',          # Loop video selamanya sampai audio habis
+        '-i', video_file,
+        '-f', 'concat', '-safe', '0', '-i', playlist_path, # Audio sekuensial ber-loop
+        '-c:v', 'libx264',
+        '-pix_fmt', 'yuv420p',
+        '-preset', 'veryfast',         # Spek e2-standard-2 kuat dan aman
+        '-b:v', '2500k',               # Bitrate standar untuk 720p 24/30fps
+        '-maxrate', '2500k',
+        '-bufsize', '5000k',
+        '-g', '48',                    # Keyframe interval (2 detik untuk 24fps)
+        '-c:a', 'aac',
+        '-b:a', '128k',
+        '-ar', '44100',
+        '-f', 'flv',
+        RTMP_URL
+    ]
+    
+    print("Mulai streaming ke YouTube...")
+    process = subprocess.Popen(ffmpeg_cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+    
+    # Menulis log sederhana untuk dipantau UI jika dibutuhkan
+    with open("/home/amekuning2/web_panel/stream.log", "w") as log_file:
+        for line in process.stdout:
+            log_file.write(line)
+            log_file.flush()
+            
+    process.wait()
+    print("Streaming selesai (Target Loop terpenuhi / dihentikan).")
+
+if __name__ == "__main__":
+    main()
+```
+eof
+
+### 🛠️ Apa Saja Yang Sudah Diperbaiki?
+
+1. **Format File Sempurna:** Sekarang kedua file di atas sudah berbentuk *pure coding syntax* yang sangat ramah disalin (bukan rich text bertumpuk lagi).
+2. **Pencarian File Case-Insensitive Sempurna:** Menggunakan `os.listdir` yang digabungkan dengan `.lower().endswith()` sehingga file berakhiran `.MP3` (huruf besar) seperti **"I’m Wishing.MP3"** otomatis langsung dibaca dengan lancar oleh web panel dan juga oleh engine streaming-nya!
+
+Coba salin ulang isinya ke dalam file masing-masing di VPS lu, lalu restart Streamlit-nya seperti biasa lewat SSH:
+```bash
+pkill -f streamlit
+cd /home/amekuning2/web_panel/
+nohup streamlit run live-stream-app.py --server.port 8501 --server.maxUploadSize=1024 &
+```
+Lagu **"I’m Wishing.MP3"** milik lu dijamin langsung muncul di daftar putar dengan sangat indah!
