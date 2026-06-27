@@ -3,82 +3,60 @@ import streamlit as st
 import os
 import glob
 import subprocess
-import signal
 import base64
 from mutagen.mp3 import MP3
 from mutagen.id3 import ID3, APIC
 
-# Set halaman ke mode centered agar ramping di desktop & pas di HP
 st.set_page_config(page_title="YouTube Live Control", layout="centered")
 
 # --- PATH CONFIGURATION ---
 VIDEO_DIR = "/home/amekuning2/web_panel/video"
 AUDIO_DIR = "/home/amekuning2/web_panel/audio"
-PID_FILE = "/home/amekuning2/web_panel/stream.pid"
+PID_FILE  = "/home/amekuning2/web_panel/stream.pid"
 STREAM_KEY_FILE = "/home/amekuning2/web_panel/stream_key.txt"
 
 os.makedirs(VIDEO_DIR, exist_ok=True)
 os.makedirs(AUDIO_DIR, exist_ok=True)
 
-# --- MODERN BASE64 SVG THUMBNAIL PLACEHOLDERS (Anti-Broken Link) ---
-# Play icon aesthetic placeholder for video
+# --- SVG PLACEHOLDERS ---
 DEFAULT_COVER = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIj48cmVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgcng9IjEyIiBmaWxsPSIjMjIyIi8+PHBvbHlnb24gcG9pbnRzPSI0MCwzNSA3MCw1MCA0MCw2NSIgZmlsbD0iI0ZGMDAwMCIvPjwvc3ZnPg=="
-# Music note aesthetic placeholder for audio tracks without album art
 DEFAULT_MUSIC_COVER = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIj48cmVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgcng9IjEyIiBmaWxsPSIjMjIyIi8+PHBhdGggZD0iTTM1LDc1IEE4LDggMCAxLDEgMzUsNjAgTDY1LDMwIEw2NSw0NSBMMzUsNzUgWiBNNjUsMzAgTDY1LDE1IEw4NSwyNSBMODUsNDAgWiIgZmlsbD0iIzg4OCIvPjwvc3ZnPg=="
 
-# --- INJECT CUSTOM CSS FOR PREMIUM DARK THEME ---
-st.markdown(f"""
+# --- CSS ---
+st.markdown("""
     <style>
-    /* Mengubah background utama ke Ultra-Dark */
-    .stApp {{
+    .stApp {
         background-color: #0f0f0f !important;
         color: #f1f1f1 !important;
         font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    }}
-    
-    /* Menyembunyikan element Streamlit default */
-    [data-testid="stSidebar"] {{
-        display: none !important;
-    }}
-    header {{
-        visibility: hidden !important;
-        height: 0px !important;
-    }}
-    footer {{
-        visibility: hidden !important;
-    }}
-    
-    /* Global Card/Container Dark styling */
-    .custom-card {{
+    }
+    [data-testid="stSidebar"] { display: none !important; }
+    header { visibility: hidden !important; height: 0px !important; }
+    footer { visibility: hidden !important; }
+    .custom-card {
         background-color: #161616;
         border: 1px solid #282828;
         border-radius: 12px;
         padding: 22px;
         margin-bottom: 20px;
-        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
-    }}
-    
-    /* Item row styling */
-    .item-row {{
+        box-shadow: 0 4px 15px rgba(0,0,0,0.4);
+    }
+    .item-row {
         display: flex;
         align-items: center;
         justify-content: space-between;
         padding: 12px 0;
         border-bottom: 1px solid #222222;
-    }}
-    .item-row:last-child {{
-        border-bottom: none;
-    }}
-    
-    .item-left {{
+    }
+    .item-row:last-child { border-bottom: none; }
+    .item-left {
         display: flex;
         align-items: center;
         gap: 16px;
         min-width: 0;
         flex-grow: 1;
-    }}
-    
-    .item-thumb {{
+    }
+    .item-thumb {
         width: 54px;
         height: 54px;
         border-radius: 8px;
@@ -86,15 +64,9 @@ st.markdown(f"""
         background-color: #242424;
         flex-shrink: 0;
         border: 1px solid #333333;
-    }}
-    
-    .item-info {{
-        display: flex;
-        flex-direction: column;
-        min-width: 0;
-    }}
-    
-    .item-title {{
+    }
+    .item-info { display: flex; flex-direction: column; min-width: 0; }
+    .item-title {
         font-weight: 600;
         font-size: 14.5px;
         color: #ffffff;
@@ -102,69 +74,56 @@ st.markdown(f"""
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
-    }}
-    
-    .item-subtitle {{
+    }
+    .item-subtitle {
         font-size: 12px;
         color: #888888;
         margin: 2px 0 0 0;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
-    }}
-    
-    .item-duration {{
+    }
+    .item-duration {
         font-size: 13px;
         color: #aaaaaa;
         font-family: monospace;
         margin-right: 15px;
         flex-shrink: 0;
-    }}
-    
-    /* Customization form inputs */
-    div[data-baseweb="input"] {{
+    }
+    div[data-baseweb="input"] {
         background-color: #1f1f1f !important;
         border: 1px solid #333333 !important;
         border-radius: 8px !important;
-    }}
-    input {{
-        color: #ffffff !important;
-        font-size: 15px !important;
-    }}
-    
-    /* Label styling */
-    label {{
+    }
+    input { color: #ffffff !important; font-size: 15px !important; }
+    label {
         color: #aaaaaa !important;
         font-size: 13px !important;
         font-weight: 500 !important;
         margin-bottom: 6px !important;
-    }}
-    
-    /* Custom play/stop buttons container */
-    .control-container {{
-        margin-top: 25px;
-        text-align: center;
-    }}
+    }
     </style>
 """, unsafe_allow_html=True)
 
 # --- HELPER FUNCTIONS ---
 def get_stream_status():
+    """Cek apakah core_stream.py masih berjalan via PID file."""
     if os.path.exists(PID_FILE):
         with open(PID_FILE, "r") as f:
-            pid = f.read().strip()
-        if pid:
+            pid_str = f.read().strip()
+        if pid_str:
             try:
-                os.kill(int(pid), 0)
-                return True, int(pid)
-            except OSError:
-                return False, None
+                pid = int(pid_str)
+                os.kill(pid, 0)  # Signal 0 = cek apakah proses hidup
+                return True, pid
+            except (OSError, ValueError):
+                pass
     return False, None
 
 def get_audio_duration(file_path):
     try:
         audio = MP3(file_path)
-        return audio.info.length  # dalam detik
+        return audio.info.length
     except:
         return 0
 
@@ -173,14 +132,12 @@ def get_audio_thumbnail_b64(file_path):
         audio = ID3(file_path)
         for tag in audio.values():
             if isinstance(tag, APIC):
-                # Convert cover art bytes to base64 string
                 b64_data = base64.b64encode(tag.data).decode("utf-8")
                 return f"data:{tag.mime};base64,{b64_data}"
     except:
         pass
     return DEFAULT_MUSIC_COVER
 
-# Save stream key persistently
 def save_stream_key(key):
     with open(STREAM_KEY_FILE, "w") as f:
         f.write(key)
@@ -191,13 +148,37 @@ def load_stream_key():
             return f.read().strip()
     return ""
 
-# Initialize session state for music add toggle
+def start_stream(stream_key, loop_count):
+    """Launch core_stream.py secara independen di background."""
+    # Kill proses lama kalau ada
+    stop_stream()
+    cmd = (
+        f"nohup python3 /home/amekuning2/web_panel/core_stream.py "
+        f"'{stream_key}' {loop_count} "
+        f"> /home/amekuning2/web_panel/stream.log 2>&1 & echo $!"
+    )
+    result = subprocess.run(cmd, shell=True, stdout=subprocess.PIPE, text=True)
+    pid = result.stdout.strip()
+    if pid:
+        with open(PID_FILE, "w") as f:
+            f.write(pid)
+        return True
+    return False
+
+def stop_stream():
+    """Kill core_stream.py dan semua proses FFmpeg."""
+    os.system("pkill -f core_stream.py")
+    os.system("pkill -f ffmpeg")
+    if os.path.exists(PID_FILE):
+        os.remove(PID_FILE)
+
+# --- SESSION STATE ---
 if "show_add_music" not in st.session_state:
     st.session_state.show_add_music = False
 
 is_running, run_pid = get_stream_status()
 
-# --- 1. YOUTUBE HEADER BANNER ---
+# --- HEADER ---
 st.markdown("""
     <div style="background-color: #FF0000; display: flex; justify-content: center; align-items: center; height: 110px; border-radius: 6px; margin-bottom: 20px;">
         <svg viewBox="0 0 200 60" width="200" height="60">
@@ -205,32 +186,29 @@ st.markdown("""
             <text x="62" y="41" fill="#FFFFFF" font-family="'Arial Black', Gadget, sans-serif" font-size="28" font-weight="900" letter-spacing="-1">YouTube</text>
         </svg>
     </div>
-    <h2 style="text-align: center; color: white; margin-top: -5px; margin-bottom: 5px; font-weight: 700; letter-spacing: -0.5px;">🚀 YouTube Live Streaming</h2>
-    <h3 style="text-align: center; color: white; margin-top: -4px; margin-bottom: 20px; font-weight: 500; font-size: 16px;">Dashboard v2.5 - Stream Control</h3>
+    <h2 style="text-align:center; color:white; margin-top:-5px; margin-bottom:5px; font-weight:700; letter-spacing:-0.5px;">🚀 YouTube Live Streaming</h2>
+    <h3 style="text-align:center; color:white; margin-top:-4px; margin-bottom:20px; font-weight:500; font-size:16px;">Dashboard v3.0 - Stream Control</h3>
 """, unsafe_allow_html=True)
 
-# --- 2. STREAM KEY INPUT ---
+# --- STREAM KEY ---
 saved_key = load_stream_key()
-stream_key = st.text_input("Youtube Stream Key", type="password", value=saved_key or "xxxx")
-if stream_key != saved_key:
+stream_key = st.text_input("Youtube Stream Key", type="password", value=saved_key or "")
+if stream_key and stream_key != saved_key:
     save_stream_key(stream_key)
 
 st.write("")
 
-# --- 3. VIDEO LIST CARD (READ-ONLY) ---
+# --- VIDEO LIST ---
 st.markdown('<div class="custom-card">', unsafe_allow_html=True)
 st.markdown("<h3 style='margin:0; font-size:18px; font-weight:600; color:white;'>Video List</h3>", unsafe_allow_html=True)
 
-# List Video files (Max 1 video)
 video_files = glob.glob(os.path.join(VIDEO_DIR, "*.mp4"))
 if video_files:
     v_path = video_files[0]
     v_filename = os.path.basename(v_path)
-    # Simple formatting title from filename
     v_display_title = os.path.splitext(v_filename)[0].replace("-", " ").replace("_", " ").title()
-    
     st.markdown(f"""
-        <div class="item-row" style="margin-top: 15px;">
+        <div class="item-row" style="margin-top:15px;">
             <div class="item-left">
                 <img class="item-thumb" src="{DEFAULT_COVER}" alt="Video thumb">
                 <div class="item-info">
@@ -241,11 +219,11 @@ if video_files:
         </div>
     """, unsafe_allow_html=True)
 else:
-    st.markdown("<div style='color:#666666; font-size:14px; margin-top:15px; font-style:italic;'>Tidak ada video aktif di folder. Silakan upload file video (.mp4) via WinSCP atau AndFTP Anda.</div>", unsafe_allow_html=True)
+    st.markdown("<div style='color:#666666; font-size:14px; margin-top:15px; font-style:italic;'>Tidak ada video. Upload via WinSCP ke folder /video.</div>", unsafe_allow_html=True)
 
 st.markdown('</div>', unsafe_allow_html=True)
 
-# --- 4. MUSIC LIST CARD ---
+# --- MUSIC LIST ---
 st.markdown('<div class="custom-card">', unsafe_allow_html=True)
 col_m_title, col_m_btn = st.columns([5, 1])
 with col_m_title:
@@ -254,19 +232,19 @@ with col_m_btn:
     if st.button("➕ Add", key="add_m_trigger", use_container_width=True):
         st.session_state.show_add_music = not st.session_state.show_add_music
 
-# Inline Music Upload form
 if st.session_state.show_add_music:
     st.markdown("<div style='margin-top:15px; padding:15px; background:#1f1f1f; border-radius:8px;'>", unsafe_allow_html=True)
     uploaded_audio = st.file_uploader("Upload audio track baru (.mp3)", type=["mp3"])
     if uploaded_audio is not None:
-        with open(os.path.join(AUDIO_DIR, uploaded_audio.name), "wb") as f:
+        save_path = os.path.join(AUDIO_DIR, uploaded_audio.name)
+        with open(save_path, "wb") as f:
             f.write(uploaded_audio.getbuffer())
-        st.success(f"Berhasil menambahkan track: {uploaded_audio.name}")
+        st.success(f"✅ Berhasil menambahkan: {uploaded_audio.name}")
         st.session_state.show_add_music = False
         st.rerun()
     st.markdown("</div>", unsafe_allow_html=True)
 
-# List Music files sorted alphabetically
+# List audio sorted alfabetis (pakai prefix nomor untuk atur urutan)
 audio_files = sorted(glob.glob(os.path.join(AUDIO_DIR, "*.mp3")))
 total_duration_sec = 0
 
@@ -276,25 +254,21 @@ if audio_files:
         filename = os.path.basename(audio_path)
         duration = get_audio_duration(audio_path)
         total_duration_sec += duration
-        
+
         minutes, seconds = divmod(int(duration), 60)
         formatted_duration = f"{minutes:02d}:{seconds:02d}"
-        
-        # Get Album art base64 / default cover URL
+
         cover_src = get_audio_thumbnail_b64(audio_path)
-        
-        # Human friendly title
+
         clean_title = os.path.splitext(filename)[0]
-        # Remove common numeric sorting prefixes from view
         if "_" in clean_title and clean_title.split("_")[0].isdigit():
             clean_title = clean_title.split("_", 1)[1]
         clean_title = clean_title.replace("-", " ").replace("_", " ").title()
 
-        # HTML Row layout
         st.markdown(f"""
             <div class="item-row">
                 <div class="item-left">
-                    <img class="item-thumb" src="{cover_src}" alt="Audio Cover">
+                    <img class="item-thumb" src="{cover_src}" alt="Cover">
                     <div class="item-info">
                         <div class="item-title">{clean_title}</div>
                         <div class="item-subtitle">{filename}</div>
@@ -303,74 +277,83 @@ if audio_files:
                 <div class="item-duration">{formatted_duration}</div>
             </div>
         """, unsafe_allow_html=True)
-        
-        # Actions columns underneath the row
-        col_act_dummy, col_act_pop = st.columns([5, 1])
-        with col_act_pop:
-            with st.popover("⋮ Actions", key=f"pop_{idx}"):
-                new_name = st.text_input("Rename File", value=filename, key=f"ren_input_{idx}")
-                if new_name != filename:
-                    os.rename(audio_path, os.path.join(AUDIO_DIR, new_name))
-                    st.rerun()
-                if st.button("🗑️ Delete", key=f"del_btn_{idx}", use_container_width=True):
+
+        col_dummy, col_pop = st.columns([5, 1])
+        with col_pop:
+            with st.popover("⋮", key=f"pop_{idx}"):
+                new_name = st.text_input("Rename", value=filename, key=f"ren_{idx}")
+                if st.button("✅ Simpan Nama", key=f"save_ren_{idx}"):
+                    if new_name != filename:
+                        os.rename(audio_path, os.path.join(AUDIO_DIR, new_name))
+                        st.rerun()
+                if st.button("🗑️ Delete", key=f"del_{idx}", use_container_width=True):
                     os.remove(audio_path)
                     st.rerun()
-                    
+
     st.markdown("</div>", unsafe_allow_html=True)
 else:
     st.markdown("<div style='color:#666666; font-size:14px; margin-top:15px; font-style:italic;'>Playlist kosong. Silakan upload file MP3.</div>", unsafe_allow_html=True)
 
 st.markdown('</div>', unsafe_allow_html=True)
 
-# --- 5. NUMBER LOOP INPUT ---
+# --- NUMBER LOOP & ESTIMASI ---
 loop_count = st.number_input("Number Loop", min_value=1, value=5, step=1)
 
-# Estimate total broadcast runtime
 total_min = total_duration_sec / 60
 grand_total_min = total_min * loop_count
 hours, mins = divmod(int(grand_total_min), 60)
 
-# Display calculations as sleek mini status indicators
 if total_duration_sec > 0:
     st.markdown(f"""
-        <div style="background-color:#161616; padding:15px; border-radius:10px; border: 1px solid #222222; margin-top:15px; font-size:13.5px; color:#aaaaaa;">
-            📊 <b>Estimasi Live Selesai (Auto-Stop):</b> 
-            {int(total_min)} menit/playlist × {loop_count} Loop = <b>{hours} Jam {mins} Menit</b>
+        <div style="background-color:#161616; padding:15px; border-radius:10px; border:1px solid #222222; margin-top:15px; font-size:13.5px; color:#aaaaaa;">
+            📊 <b>Estimasi Live:</b> {int(total_min)} menit/playlist × {int(loop_count)} Loop = <b>{hours} Jam {mins} Menit</b>
         </div>
     """, unsafe_allow_html=True)
 
 st.write("")
 
-# --- 6. PLAY / STOP LIVE BUTTON ---
+# --- PLAY / STOP BUTTON ---
 if is_running:
     st.markdown(f"""
-        <div style="text-align: center; color: #2ecc71; font-weight: 600; font-size: 14px; margin-bottom: 12px;">
+        <div style="text-align:center; color:#2ecc71; font-weight:600; font-size:14px; margin-bottom:12px;">
             🟢 LIVE STREAM SEDANG BERJALAN (PID: {run_pid})
         </div>
     """, unsafe_allow_html=True)
-    
     if st.button("🟥 Stop Live", key="stop_live_btn", use_container_width=True):
-        os.kill(run_pid, signal.SIGTERM)
-        if os.path.exists(PID_FILE):
-            os.remove(PID_FILE)
+        stop_stream()
         st.rerun()
 else:
-    st.markdown(f"""
-        <div style="text-align: center; color: #e74c3c; font-weight: 600; font-size: 14px; margin-bottom: 12px;">
+    st.markdown("""
+        <div style="text-align:center; color:#e74c3c; font-weight:600; font-size:14px; margin-bottom:12px;">
             🔴 STATUS: OFFLINE
         </div>
     """, unsafe_allow_html=True)
-    
     if st.button("▶️ Play Live", key="play_live_btn", use_container_width=True):
-        if not stream_key or stream_key == "paste-your-youtube-stream-key-here":
-            st.error("Silakan masukkan Youtube Stream Key yang valid!")
+        if not stream_key:
+            st.error("Masukkan Youtube Stream Key dulu!")
         elif not video_files:
-            st.error("Gagal memulai! Silakan upload file video background terlebih dahulu.")
+            st.error("Upload video background dulu via WinSCP!")
         elif not audio_files:
-            st.error("Gagal memulai! Silakan upload minimal 1 lagu di Playlist.")
+            st.error("Upload minimal 1 lagu di Playlist dulu!")
         else:
-            # Trigger engine core_stream.py di background
-            p = subprocess.Popen(["python3", "/home/amekuning2/web_panel/core_stream.py", stream_key, str(loop_count)])
-            with open(PID_FILE, "w") as f:
-                f.write(str(p.pid))
-            st.rerun()
+            ok = start_stream(stream_key, int(loop_count))
+            if ok:
+                st.success("✅ Streaming dimulai!")
+                st.rerun()
+            else:
+                st.error("Gagal start stream. Cek log.")
+
+st.write("")
+
+# --- DOWNLOAD LOG ---
+log_path = "/home/amekuning2/web_panel/stream.log"
+if os.path.exists(log_path):
+    with open(log_path, "rb") as f:
+        log_data = f.read()
+    st.download_button(
+        label="⬇️ Download Log",
+        data=log_data,
+        file_name="stream_log.txt",
+        mime="text/plain",
+        use_container_width=True
+    )

@@ -49,6 +49,8 @@ def main():
         '-stream_loop', '-1',          # Loop video selamanya sampai audio habis
         '-i', video_file,
         '-f', 'concat', '-safe', '0', '-i', playlist_path, # Audio sekuensial ber-loop
+        '-map', '0:v:0',               # video dari input pertama (video file)
+        '-map', '1:a:0',               # audio dari input kedua (playlist)
         '-c:v', 'libx264',
         '-pix_fmt', 'yuv420p',
         '-preset', 'veryfast',         # Spek e2-standard-2 kuat dan aman
