@@ -1,7 +1,6 @@
 # /home/amekuning2/web_panel/live-stream-app.py
 import streamlit as st
 import os
-import glob
 import subprocess
 import base64
 from mutagen.mp3 import MP3
@@ -150,7 +149,6 @@ def load_stream_key():
 
 def start_stream(stream_key, loop_count):
     """Launch core_stream.py secara independen di background."""
-    # Kill proses lama kalau ada
     stop_stream()
     cmd = (
         f"nohup python3 /home/amekuning2/web_panel/core_stream.py "
@@ -202,7 +200,14 @@ st.write("")
 st.markdown('<div class="custom-card">', unsafe_allow_html=True)
 st.markdown("<h3 style='margin:0; font-size:18px; font-weight:600; color:white;'>Video List</h3>", unsafe_allow_html=True)
 
-video_files = glob.glob(os.path.join(VIDEO_DIR, "*.mp4"))
+# Membaca video secara case-insensitive
+video_files = []
+if os.path.exists(VIDEO_DIR):
+    video_files = [
+        os.path.join(VIDEO_DIR, f) for f in os.listdir(VIDEO_DIR)
+        if f.lower().endswith('.mp4')
+    ]
+
 if video_files:
     v_path = video_files[0]
     v_filename = os.path.basename(v_path)
@@ -244,8 +249,13 @@ if st.session_state.show_add_music:
         st.rerun()
     st.markdown("</div>", unsafe_allow_html=True)
 
-# List audio sorted alfabetis (pakai prefix nomor untuk atur urutan)
-audio_files = sorted(glob.glob(os.path.join(AUDIO_DIR, "*.mp3")))
+# List audio sorted alfabetis (case-insensitive)
+audio_files = []
+if os.path.exists(AUDIO_DIR):
+    audio_files = sorted([
+        os.path.join(AUDIO_DIR, f) for f in os.listdir(AUDIO_DIR)
+        if f.lower().endswith('.mp3')
+    ])
 total_duration_sec = 0
 
 if audio_files:
